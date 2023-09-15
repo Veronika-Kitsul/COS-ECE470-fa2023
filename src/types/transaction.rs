@@ -1,28 +1,49 @@
 use serde::{Serialize,Deserialize};
+use ring::signature;
 use ring::signature::{Ed25519KeyPair, Signature};
 use rand::Rng;
+use super::address::Address;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
+    Sender: Address,
+    Receiver: Address,
+    Value: i32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct SignedTransaction {
+
 }
 
 /// Create digital signature of a transaction
 pub fn sign(t: &Transaction, key: &Ed25519KeyPair) -> Signature {
-    unimplemented!()
+    let serialized_t_str = serde_json::to_string(&t).unwrap();
+    let serialized_t = serialized_t_str.as_bytes();
+    let signature = key.sign(&serialized_t);
+    signature
 }
 
 /// Verify digital signature of a transaction, using public key instead of secret key
 pub fn verify(t: &Transaction, public_key: &[u8], signature: &[u8]) -> bool {
-    unimplemented!()
+    let serialized_t_str = serde_json::to_string(&t).unwrap();
+    let serialized_t = serialized_t_str.as_bytes();
+    let public_key = ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, public_key);
+    public_key.verify(serialized_t, signature).is_ok()
 }
 
 #[cfg(any(test, test_utilities))]
 pub fn generate_random_transaction() -> Transaction {
-    unimplemented!()
+    let mut rng = rand::thread_rng();
+    let value = rng.gen_range(0..i32::MAX);
+    let sender: [u8; 32] = rng.gen();
+    let receiver: [u8; 32] = rng.gen();
+    
+    Transaction {
+        Sender: Address::from_public_key_bytes(&sender), 
+        Receiver: Address::from_public_key_bytes(&receiver), 
+        Value: value
+    }
 }
 
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST
