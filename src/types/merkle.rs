@@ -1,17 +1,46 @@
 use super::hash::{Hashable, H256};
+use ring::digest::{Context, SHA256};
+use ring::digest;
 
 /// A Merkle tree.
 #[derive(Debug, Default)]
 pub struct MerkleTree {
+    dat: Vec<Vec<H256>>,
 }
 
 impl MerkleTree {
     pub fn new<T>(data: &[T]) -> Self where T: Hashable, {
-        unimplemented!()
+        let mut tree: Vec<Vec<H256>> = Vec::new();
+        tree.push(Vec::new());
+        for elem in data {
+            tree[0].push(elem.hash());
+        }
+        let mut level = 0;
+        
+        while tree[level].len()>2 {
+            tree.push(Vec::new());
+            if tree[level].len()%2 != 0 {
+                let lenArr = tree[level].len();
+                let mut temp = tree[level][lenArr-1].clone();
+                tree[level].push(temp);
+            }
+            for i in (0..level).step_by(2) {
+                let mut ctx = Context::new(&digest::SHA256);
+                ctx.update(tree[level][i].as_ref());
+                ctx.update(tree[level][i + 1].as_ref());
+                let hashval = ctx.finish();
+                tree[level + 1].push(hashval.into());
+            }
+            level+=1;
+        }
+        let mut val = MerkleTree {
+            dat: tree,
+        };
+        return val;
     }
 
     pub fn root(&self) -> H256 {
-        unimplemented!()
+        return self.dat[self.dat.len()-1][0];
     }
 
     /// Returns the Merkle Proof of data at index i
