@@ -17,14 +17,14 @@ impl MerkleTree {
         }
         let mut level = 0;
         
-        while tree[level].len()>2 {
+        while tree[level].len()>=2 {
             tree.push(Vec::new());
             if tree[level].len()%2 != 0 {
                 let lenArr = tree[level].len();
                 let mut temp = tree[level][lenArr-1].clone();
                 tree[level].push(temp);
             }
-            for i in (0..level).step_by(2) {
+            for i in (0..tree[level].len()).step_by(2) {
                 let mut ctx = Context::new(&digest::SHA256);
                 ctx.update(tree[level][i].as_ref());
                 ctx.update(tree[level][i + 1].as_ref());
@@ -45,7 +45,21 @@ impl MerkleTree {
 
     /// Returns the Merkle Proof of data at index i
     pub fn proof(&self, index: usize) -> Vec<H256> {
-        unimplemented!()
+        let mut currLevel =  self.dat.len()-1;
+        let mut ind = index;
+        let mut prf: Vec<H256> = Vec::new();
+        while currLevel>=1{
+            ind = ind/2;
+            currLevel=currLevel-1;
+            if ind %2 == 0{
+                prf.push(self.dat[currLevel][ind+1]);
+            }
+            else{
+                prf.push(self.dat[currLevel][ind-1]);
+            }
+        }
+
+        prf
     }
 }
 
