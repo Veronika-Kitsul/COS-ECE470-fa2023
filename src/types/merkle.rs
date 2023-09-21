@@ -39,8 +39,8 @@ impl MerkleTree {
             
             let mut row : Vec<H256> = Vec::new();
 
-            for i in (0..prev_row.len() - 1).step_by(2) {
-                println!("i {:?}", i);
+            for i in (0..prev_row.len()).step_by(2) {
+                
                 let mut concat : [u8; 64] = [0; 64];
                 let hash1 = prev_row[i].as_ref();
                 let hash2 = prev_row[i + 1].as_ref();
@@ -62,7 +62,7 @@ impl MerkleTree {
             t.insert(0, row.clone());
             prev_row = row;
 
-            println!("prev row{:?}", prev_row.len());
+            
         }
 
         let mTree : MerkleTree = MerkleTree{tree: t};
@@ -76,15 +76,83 @@ impl MerkleTree {
 
     /// Returns the Merkle Proof of data at index i
     pub fn proof(&self, index: usize) -> Vec<H256> {
-        unimplemented!()
+        let mut sib : Vec<H256> = Vec :: new();
+        let mut empty : Vec<H256> = Vec::new();
+        let zeros : [u8; 32] = [0; 32];
+        empty.push(H256::from(zeros));
+
+        if self.tree[0][0].eq(&empty[0]) || self.tree.len() == 1 || index >= self.tree[self.tree.len() - 1].len() || index < 0 {
+            return sib;
+        }
+
+        if index%2 == 0{
+            sib.push(self.tree[self.tree.len() - 1][index + 1]);
+        }
+        else {
+            sib.push(self.tree[self.tree.len() - 1][index - 1]);
+        }
+
+        if self.tree.len() == 2{
+            return sib;
+        }
+
+        let mut position = index/2;
+
+        for i in self.tree.len() - 2..1{
+            if position%2 == 0{
+                sib.push(self.tree[self.tree.len() - 1][position + 1]);
+            }
+            else{
+                sib.push(self.tree[self.tree.len() - 1][position - 1]);
+            }
+            position = position/2;
+        }
+        return sib;
+
     }
 }
 
 /// Verify that the datum hash with a vector of proofs will produce the Merkle root. Also need the
 /// index of datum and `leaf_size`, the total number of leaves.
 pub fn verify(root: &H256, datum: &H256, proof: &[H256], index: usize, leaf_size: usize) -> bool {
-    unimplemented!()
+    if leaf_size == 0 || index >= leaf_size{
+        return false;
+    }
+    if leaf_size == 1{
+        return root.eq(datum);
+    }
+    let mut next : H256;
+    next = datum.clone();
+    let mut position = index;
+
+
+
+    
+    for i in 0..proof.len() {
+        let mut concat : [u8; 64] = [0; 64];
+        let mut hash1: [u8; 32] = [0; 32];
+        let mut hash2: [u8; 32] = [0; 32];
+        if position % 2 == 0{
+            hash1.copy_from_slice(next.as_ref());
+            hash2.copy_from_slice(proof[i].as_ref());
+        }
+        else {
+            hash2.copy_from_slice(next.as_ref());
+            hash1.copy_from_slice(proof[i].as_ref());
+        }
+        
+        concat[..32].copy_from_slice(&hash1);
+        concat[32..].copy_from_slice(&hash2);
+
+        let hash = digest::digest(&digest::SHA256, &concat);
+        let hash_bytes = hash.as_ref();
+        let mut hash_array = [0u8; 32];
+        hash_array.copy_from_slice(&hash_bytes[0..32]);
+        next = H256::from(hash_array);
+    }
+    return root.eq(&next);
 }
+
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST
 
 #[cfg(test)]
