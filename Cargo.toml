@@ -22,6 +22,7 @@ crossbeam = "0.8"
 rand = "0.8"
 hex-literal = "0.3"
 clap = { version = "2.33", features = ["wrap_help"]}
+sha2 = "0.10.0"
 
 [features]
 default = []

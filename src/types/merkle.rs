@@ -1,17 +1,77 @@
 use super::hash::{Hashable, H256};
+use ring::digest;
 
 /// A Merkle tree.
 #[derive(Debug, Default)]
 pub struct MerkleTree {
+    tree: Vec<Vec<H256>>,
 }
 
 impl MerkleTree {
-    pub fn new<T>(data: &[T]) -> Self where T: Hashable, {
-        unimplemented!()
+    pub fn new<T>(data: &[T]) -> Self where T: Hashable + Clone, {
+
+        let mut t: Vec<Vec<H256>> = Vec::new();
+        if data.len() == 0 {
+            let mut empty : Vec<H256> = Vec::new();
+            let zeros : [u8; 32] = [0; 32];
+            empty.push(H256::from(zeros));
+            t.push(empty);
+            let mTree : MerkleTree = MerkleTree{tree: t};
+            return mTree;
+        }
+        else if data.len() == 1 {
+            let mut empty : Vec<H256> = Vec::new();
+            empty.push(data[0].hash());
+            t.push(empty);
+            let mTree : MerkleTree = MerkleTree{tree: t};
+            return mTree;
+        }
+        
+        let mut prev_row: Vec<H256> = data.iter().map(|item| item.hash()).collect();
+
+        if prev_row.len() % 2 == 1
+        {
+            prev_row.push(prev_row[prev_row.len() - 1].clone());
+        }
+        t.insert(0, prev_row.clone());
+
+        while prev_row.len() > 1 {
+            
+            let mut row : Vec<H256> = Vec::new();
+
+            for i in (0..prev_row.len() - 1).step_by(2) {
+                println!("i {:?}", i);
+                let mut concat : [u8; 64] = [0; 64];
+                let hash1 = prev_row[i].as_ref();
+                let hash2 = prev_row[i + 1].as_ref();
+                concat[..32].copy_from_slice(&hash1);
+                concat[32..].copy_from_slice(&hash2);
+
+                let hash = digest::digest(&digest::SHA256, &concat);
+                let hash_bytes = hash.as_ref();
+                let mut hash_array = [0u8; 32];
+                hash_array.copy_from_slice(&hash_bytes[0..32]);
+                let new_hash = H256::from(hash_array);
+
+                row.push(new_hash);
+            }
+
+            if row.len() % 2 == 1 && row.len() != 1 {
+                row.push(row[row.len() - 1]);
+            }
+            t.insert(0, row.clone());
+            prev_row = row;
+
+            println!("prev row{:?}", prev_row.len());
+        }
+
+        let mTree : MerkleTree = MerkleTree{tree: t};
+        mTree
     }
 
     pub fn root(&self) -> H256 {
-        unimplemented!()
+        // just return the root
+        self.tree[0][0]
     }
 
     /// Returns the Merkle Proof of data at index i
