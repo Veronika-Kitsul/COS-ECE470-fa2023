@@ -90,7 +90,7 @@ impl MerkleTree {
         let zeros : [u8; 32] = [0; 32];
         empty.push(H256::from(zeros));
 
-        if self.tree[0][0].eq(&empty[0]) || self.tree.len() == 1 || index >= self.tree[self.tree.len() - 1].len() || index < 0 {
+        if self.tree[0][0].eq(&empty[0]) || self.tree.len() == 1 || index >= self.tree[self.tree.len() - 1].len() {
             return sib;
         }
 

@@ -10,6 +10,7 @@ use rand::Rng;
 pub struct Block {
     header : Header,
     content : Content,
+    to_genesis : u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -19,7 +20,6 @@ struct Header {
     difficulty: H256,
     timestamp: u128,
     merkle_root : H256,
-    to_genesis : u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -58,14 +58,13 @@ impl Hashable for SignedTransaction {
 }
 
 impl Header {
-    pub fn new(p: H256, n: u32, d: H256, t: u128, r: H256, gen : u32)-> Header {
+    pub fn new(p: H256, n: u32, d: H256, t: u128, r: H256)-> Header {
         Header{
             parent : p,
             nonce : n,
             difficulty : d,
             timestamp : t,
             merkle_root : r,
-            to_genesis : gen,
         }
     }
     pub fn parent(&self) -> H256 {
@@ -79,12 +78,6 @@ impl Header {
     }
     pub fn timestamp(&self) -> u128 {
         return self.timestamp;
-    }
-    pub fn to_genesis(&self) -> u32 {
-        return self.to_genesis;
-    }
-    pub fn change_to_genesis(&mut self, gen : u32) {
-        self.to_genesis = gen;
     }
 }
 
@@ -111,8 +104,9 @@ impl Block {
 
     pub fn new(p: H256, n: u32, d: H256, t: u128, r: H256, gen : u32, transactions: Vec<SignedTransaction>) -> Block {
         Block{
-            header :  Header :: new(p, n, d, t, r, gen),
+            header :  Header :: new(p, n, d, t, r),
             content : Content :: new(transactions),
+            to_genesis : gen,
         }
     }
     pub fn get_parent(&self) -> H256 {
@@ -124,10 +118,10 @@ impl Block {
     }
 
     pub fn get_to_genesis(&self) -> u32 {
-        return self.header.to_genesis();
+        return self.to_genesis;
     }
     pub fn set_to_genesis(&mut self, gen : u32) {
-        self.header.change_to_genesis(gen);
+        self.to_genesis = gen;
     }
 }
 
@@ -148,7 +142,8 @@ pub fn generate_random_block(parent: &H256) -> Block {
     let gen = 0;
 
     Block {
-        header : Header :: new(*parent, n, d, t, r, gen),
+        header : Header :: new(*parent, n, d, t, r),
         content : Content :: new(transactions),
+        to_genesis : gen,
     }
 }
