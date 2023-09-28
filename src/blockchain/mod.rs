@@ -1,36 +1,38 @@
-use crate::types::block::Block;
-use crate::types::hash::H256;
+use crate::types::block::{Block};
+use crate::types::block;
+use crate::types::hash::{H256, Hashable};
 use std::collections::HashMap;
 use std::ptr;
-use rand::Rng;
-use std::time::Instant;
 
 pub struct Blockchain {
-    map : HashMap,
+    map : HashMap<H256, Block>,
     tip : Block,
 }
 
 impl Blockchain {
     /// Create a new blockchain, only containing the genesis block
     pub fn new() -> Self {
-        let p : *H256 = ptr::null();
-        let genesis : Block :: generate_random_block(p);
-        let mut m = HashMap :: new();
+        let zeros : [u8; 32] = [0; 32];
+        let p = H256::from(zeros);
+        let genesis = block :: generate_random_block(&p);
+        let mut t = genesis.clone();
+        let mut m : HashMap<H256, Block> = HashMap :: new();
         m.insert(genesis.hash(), genesis);
         Self {
             map : m,
-            tip : genesis,
+            tip : t,
         }
     }
 
     /// Insert a block into blockchain
     pub fn insert(&mut self, block: &Block) {
-        let len : u32 = self.map.get(*block.get_parent().hash()).get_to_genesis()
-        block.set_to_genesis(len + 1);
-        if block.get_to_genesis() > tip.get_to_genesis() {
-            tip = block;
+        let len : u32 = self.map.get(&block.get_parent()).unwrap().get_to_genesis();
+        let mut new_block = block.clone();
+        new_block.set_to_genesis(len + 1);
+        if new_block.get_to_genesis() > self.tip.get_to_genesis() {
+            self.tip = new_block.clone();
         }
-        self.map.insert(block.hash(), block);
+        self.map.insert(new_block.hash(), new_block);
     }
 
     /// Get the last block's hash of the longest chain
@@ -40,15 +42,17 @@ impl Blockchain {
 
     /// Get all blocks' hashes of the longest chain, ordered from genesis to the tip
     pub fn all_blocks_in_longest_chain(&self) -> Vec<H256> {
-        let mut blocks : Vec<H256> :: new();
+        let mut blocks : Vec<H256> = Vec::new();
         blocks.push(self.tip.hash());
         let mut parent = self.tip.get_parent();
-        if parent != ptr::null() {
+        let zeros : [u8; 32] = [0; 32];
+        let empty = H256::from(zeros);
+        if parent.eq(&empty) {
             return blocks;
         }
-        while (parent != ptr::null()) {
-            blocks.insert(*parent.hash());
-            parent = parent.get_parent();
+        while !parent.eq(&empty) {
+            blocks.insert(0, parent);
+            parent = self.map.get(&parent).unwrap().get_parent();
         }
         return blocks;
     }
