@@ -102,13 +102,16 @@ impl Content {
 
 impl Block {
 
-    pub fn new(p: H256, n: u32, d: H256, t: u128, r: H256, gen : u32, transactions: Vec<SignedTransaction>) -> Block {
+    pub fn new(p: H256, n: u32, d: H256, t: u128, gen : u32, transactions: Vec<SignedTransaction>) -> Block {
+        let c = Content :: new(transactions);
+
         Block{
-            header :  Header :: new(p, n, d, t, r),
-            content : Content :: new(transactions),
+            header :  Header :: new(p, n, d, t, c.root()),
+            content : c,
             to_genesis : gen,
         }
     }
+
     pub fn get_parent(&self) -> H256 {
         return self.header.parent();
     }
@@ -123,18 +126,20 @@ impl Block {
     pub fn set_to_genesis(&mut self, gen : u32) {
         self.to_genesis = gen;
     }
+
+    pub fn get_root(&self) -> H256 {
+        return self.content.root();
+    }
 }
 
 #[cfg(any(test, test_utilities))]
 pub fn generate_random_block(parent: &H256) -> Block {
     let mut rng = rand::thread_rng();
     let n = rng.gen_range(0..u32::MAX);
-    let d_array : [u8;32] = [u8::MAX ; 32];
-    let d_digest = digest::digest(&digest::SHA256, &d_array);
-    let hash_bytes = d_digest.as_ref();
-    let mut hash_array = [0u8; 32];
-    hash_array.copy_from_slice(&hash_bytes[0..32]);
-    let d = H256::from(hash_array);
+
+    let bytes: [u8; 32] = [0xFF; 32];
+    let d = H256::from(bytes);
+    
     let t = 0;
     let zeros : [u8; 32] = [0; 32];
     let r = H256::from(zeros);

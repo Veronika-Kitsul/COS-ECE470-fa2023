@@ -2,7 +2,9 @@ use crate::types::block::{Block};
 use crate::types::block;
 use crate::types::hash::{H256, Hashable};
 use std::collections::HashMap;
-use std::ptr;
+use rand::Rng;
+use crate::types::transaction::SignedTransaction;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Blockchain {
     map : HashMap<H256, Block>,
@@ -12,9 +14,20 @@ pub struct Blockchain {
 impl Blockchain {
     /// Create a new blockchain, only containing the genesis block
     pub fn new() -> Self {
+        let mut rng = rand::thread_rng();
+        let n = rng.gen_range(0..u32::MAX);
+
+        let bytes: [u8; 32] = [0xFF; 32];
+        let d = H256::from(bytes);
+        
+        let now = SystemTime::now();
+        let time = now.duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let transactions : Vec<SignedTransaction> =   Vec:: new();
+        let gen = 0;
         let zeros : [u8; 32] = [0; 32];
         let p = H256::from(zeros);
-        let genesis = block :: generate_random_block(&p);
+
+        let genesis =  Block :: new(p, n, d, time, gen, transactions);
         let mut t = genesis.clone();
         let mut m : HashMap<H256, Block> = HashMap :: new();
         m.insert(genesis.hash(), genesis);
@@ -38,6 +51,11 @@ impl Blockchain {
     /// Get the last block's hash of the longest chain
     pub fn tip(&self) -> H256 {
         return self.tip.hash();
+    }
+
+    /// Get the block from map corresponding to the given hash
+    pub fn get_block(&self, hash:H256) -> Block {
+        return self.map.get(&hash).unwrap().clone();
     }
 
     /// Get all blocks' hashes of the longest chain, ordered from genesis to the tip
