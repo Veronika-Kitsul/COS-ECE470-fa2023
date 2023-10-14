@@ -74,6 +74,10 @@ impl Blockchain {
         }
         return blocks;
     }
+
+    pub fn contains_block(&self, hash: H256) -> bool {
+        self.map.contains_key(&hash)
+    }
 }
 
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST

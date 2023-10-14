@@ -5,6 +5,9 @@ use crate::network::server::Handle as ServerHandle;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use crate::blockchain::Blockchain;
+use std::collections::HashMap;
+use crate::network::message::Message;
+use crate::types::hash::{H256, Hashable};
 
 #[derive(Clone)]
 pub struct Worker {
@@ -39,10 +42,12 @@ impl Worker {
     fn worker_loop(&self) {
         loop {
             let _block = self.finished_block_chan.recv().expect("Receive finished block error");
-            // TODO for student: insert this finished block to blockchain, and broadcast this block hash
+            let mut block_vec : Vec<H256> = Vec::new();
             {
                 let mut blockchain_lock = self.blockchain.lock().unwrap();
                 blockchain_lock.insert(&_block);
+                block_vec.push(_block.hash());
+                self.server.broadcast(Message:: NewBlockHashes(block_vec));
             }
         }
     }

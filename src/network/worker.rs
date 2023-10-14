@@ -1,7 +1,11 @@
-use super::message::Message;
+use crate::network::message::Message;
 use super::peer;
 use super::server::Handle as ServerHandle;
-use crate::types::hash::H256;
+use crate::types::hash::{H256, Hashable};
+use std::sync::{Arc, Mutex};
+use crate::blockchain::Blockchain;
+use crate::types::block::Block;
+use std::collections::HashMap;
 
 use log::{debug, warn, error};
 
@@ -16,6 +20,7 @@ pub struct Worker {
     msg_chan: smol::channel::Receiver<(Vec<u8>, peer::Handle)>,
     num_worker: usize,
     server: ServerHandle,
+    blockchain: Arc<Mutex<Blockchain>>,
 }
 
 
@@ -23,12 +28,13 @@ impl Worker {
     pub fn new(
         num_worker: usize,
         msg_src: smol::channel::Receiver<(Vec<u8>, peer::Handle)>,
-        server: &ServerHandle,
+        server: &ServerHandle, bc: &Arc<Mutex<Blockchain>>
     ) -> Self {
         Self {
             msg_chan: msg_src,
             num_worker,
             server: server.clone(),
+            blockchain: Arc::clone(bc),
         }
     }
 
@@ -61,7 +67,52 @@ impl Worker {
                 Message::Pong(nonce) => {
                     debug!("Pong: {}", nonce);
                 }
-                _ => unimplemented!(),
+                Message::NewBlockHashes(hash_vector) => {
+                    let mut blocks : Vec<H256> = Vec::new();
+                    {
+                        let blockchain_lock = self.blockchain.lock().unwrap();
+                        for blockhash in hash_vector {
+                            if !blockchain_lock.contains_block(blockhash) {
+                                blocks.push(blockhash);
+                            }
+                        }
+                    }
+                    if blocks.len() > 0 {
+                        peer.write(Message::GetBlocks(blocks));
+                    }
+                }
+                Message::GetBlocks(hash_vector) => {
+                    let mut blocks : Vec<Block> = Vec::new();
+                    {
+                        let blockchain_lock = self.blockchain.lock().unwrap();
+                        for blockhash in hash_vector {
+                            if blockchain_lock.contains_block(blockhash) {
+                                blocks.push(blockchain_lock.get_block(blockhash));
+                            }
+                        }
+                    }
+                    if blocks.len() > 0 {
+                        peer.write(Message::Blocks(blocks));
+                    }
+                }
+                Message::Blocks(block_vec) => {
+                    let mut block_hashes : Vec<H256> = Vec::new();
+                    {
+                        let mut blockchain_lock = self.blockchain.lock().unwrap();
+                        for block in block_vec {
+                            if !blockchain_lock.contains_block(block.hash()) {
+                                blockchain_lock.insert(&block);
+                                block_hashes.push(block.hash());
+                            }
+                        }
+                    }
+                    if block_hashes.len() > 0 {
+                        self.server.broadcast(Message:: NewBlockHashes(block_hashes));
+                    }
+                }
+                _ => { 
+                    
+                }
             }
         }
     }
@@ -90,9 +141,17 @@ impl TestMsgSender {
 fn generate_test_worker_and_start() -> (TestMsgSender, ServerTestReceiver, Vec<H256>) {
     let (server, server_receiver) = ServerHandle::new_for_test();
     let (test_msg_sender, msg_chan) = TestMsgSender::new();
-    let worker = Worker::new(1, msg_chan, &server);
+    let blockchain = Blockchain::new();
+    let blockchain = Arc::new(Mutex::new(blockchain));
+    let worker = Worker::new(1, msg_chan, &server, &blockchain);
+    let mut hashes : Vec<H256>;
+    {
+        let mut blockchain_lock = worker.blockchain.lock().unwrap();
+        hashes = blockchain_lock.all_blocks_in_longest_chain();
+    }
     worker.start(); 
-    (test_msg_sender, server_receiver, vec![])
+
+    (test_msg_sender, server_receiver, hashes)
 }
 
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST
@@ -142,6 +201,20 @@ mod test {
         let reply = server_receiver.recv().unwrap();
         if let Message::NewBlockHashes(v) = reply {
             assert_eq!(v, vec![random_block.hash()]);
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    #[timeout(60000)]
+    fn broadcast_new_blocks() {
+        let (test_msg_sender, server_receiver, v) = generate_test_worker_and_start();
+        let new_block = generate_random_block(v.last().unwrap());
+        test_msg_sender.send(Message::Blocks(vec![new_block.clone()]));
+        let reply = server_receiver.recv().unwrap();
+        if let Message::NewBlockHashes(hashes) = reply {
+            assert_eq!(hashes, vec![new_block.hash()]);
         } else {
             panic!();
         }

@@ -80,6 +80,7 @@ fn main() {
         p2p_workers,
         msg_rx,
         &server,
+        &blockchain,
     );
     worker_ctx.start();
 
