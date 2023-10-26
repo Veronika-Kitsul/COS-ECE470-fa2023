@@ -51,7 +51,7 @@ impl Worker {
     fn worker_loop(&self) {
         let mut orphans : HashMap<H256, Block> = HashMap::new();
         loop {
-            printf!("In the mining loop");
+            println!("In the mining loop");
             let result = smol::block_on(self.msg_chan.recv());
             if let Err(e) = result {
                 error!("network worker terminated {}", e);
