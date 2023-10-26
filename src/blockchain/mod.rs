@@ -30,6 +30,7 @@ impl Blockchain {
         let genesis =  Block :: new(p, n, d, time, gen, transactions);
         let mut t = genesis.clone();
         let mut m : HashMap<H256, Block> = HashMap :: new();
+        
         m.insert(genesis.hash(), genesis);
         Self {
             map : m,

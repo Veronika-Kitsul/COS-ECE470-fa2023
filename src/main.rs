@@ -37,6 +37,7 @@ fn main() {
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
     let blockchain = Blockchain::new();
+    println("tip: {:?}", blockchain.longest_chain().get(0));
     let blockchain = Arc::new(Mutex::new(blockchain));
     // parse p2p server address
     let p2p_addr = matches

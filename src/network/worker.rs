@@ -51,6 +51,7 @@ impl Worker {
     fn worker_loop(&self) {
         let mut orphans : HashMap<H256, Block> = HashMap::new();
         loop {
+            printf!("In the mining loop");
             let result = smol::block_on(self.msg_chan.recv());
             if let Err(e) = result {
                 error!("network worker terminated {}", e);
@@ -84,12 +85,14 @@ impl Worker {
                 Message::GetBlocks(hash_vector) => {
                     let mut blocks : Vec<Block> = Vec::new();
                     {
+                        println!("About to lock blockchain 1...");
                         let blockchain_lock = self.blockchain.lock().unwrap();
                         for blockhash in hash_vector {
                             if blockchain_lock.contains_block(blockhash) {
                                 blocks.push(blockchain_lock.get_block(blockhash));
                             }
                         }
+                        println!("About to drop the lock on blockchain 1...");
                     }
                     if blocks.len() > 0 {
                         peer.write(Message::Blocks(blocks));
@@ -98,12 +101,13 @@ impl Worker {
                 Message::Blocks(block_vec) => {
                     let mut block_hashes : Vec<H256> = Vec::new();
                     {
+                        println!("About to lock blockchain 2...");
                         let mut blockchain_lock = self.blockchain.lock().unwrap();
                         for block in block_vec {
                         
                             if !blockchain_lock.contains_block(block.hash()) && (block.hash() <= block.get_difficulty()) {
                                 if !blockchain_lock.contains_block(block.get_parent()) {
-                                    peer.write(Message::GetBlocks(vec![block.hash()]));
+                                    peer.write(Message::GetBlocks(vec![block.get_parent()]));
                                     orphans.insert(block.get_parent(), block);
                                 }
                                 else {
@@ -112,6 +116,7 @@ impl Worker {
                                         block_hashes.push(block.hash());
                                         let mut parent = block.hash();
                                         let mut pdiff = block.get_difficulty();
+
                                         while orphans.contains_key(&parent) {
 
                                             let mut oblock = orphans.get(&parent).unwrap().clone();
@@ -125,13 +130,12 @@ impl Worker {
                                                 orphans.remove(&parent);
                                                 break
                                             }
-                                            
                                         } 
-                                    }
-                                    
+                                    } 
                                 }   
                             }
                         }
+                        println!("About to drop the lock on blockchain 2...");
                     }
                     if block_hashes.len() > 0 {
                         self.server.broadcast(Message:: NewBlockHashes(block_hashes));
