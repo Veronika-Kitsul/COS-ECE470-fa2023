@@ -14,14 +14,16 @@ pub struct Blockchain {
 impl Blockchain {
     /// Create a new blockchain, only containing the genesis block
     pub fn new() -> Self {
-        let mut rng = rand::thread_rng();
-        let n = rng.gen_range(0..u32::MAX);
+        //let mut rng = rand::thread_rng();
+        //let n = rng.gen_range(0..u32::MAX);
+        let n = 5;
 
         let bytes: [u8; 32] = [0xFF; 32];
         let d = H256::from(bytes);
         
         let now = SystemTime::now();
-        let time = now.duration_since(UNIX_EPOCH).unwrap().as_millis();
+        // let time = now.duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let time = 0;
         let transactions : Vec<SignedTransaction> =   Vec:: new();
         let gen = 0;
         let zeros : [u8; 32] = [0; 32];
@@ -30,7 +32,7 @@ impl Blockchain {
         let genesis =  Block :: new(p, n, d, time, gen, transactions);
         let mut t = genesis.clone();
         let mut m : HashMap<H256, Block> = HashMap :: new();
-        
+
         m.insert(genesis.hash(), genesis);
         Self {
             map : m,
