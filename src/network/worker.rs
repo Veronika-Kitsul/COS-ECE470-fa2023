@@ -23,7 +23,6 @@ pub struct Worker {
     blockchain: Arc<Mutex<Blockchain>>,
 }
 
-
 impl Worker {
     pub fn new(
         num_worker: usize,
@@ -50,6 +49,7 @@ impl Worker {
     }
 
     fn worker_loop(&self) {
+        let mut orphans : HashMap<H256, Block> = HashMap::new();
         loop {
             let result = smol::block_on(self.msg_chan.recv());
             if let Err(e) = result {
@@ -100,9 +100,36 @@ impl Worker {
                     {
                         let mut blockchain_lock = self.blockchain.lock().unwrap();
                         for block in block_vec {
-                            if !blockchain_lock.contains_block(block.hash()) {
-                                blockchain_lock.insert(&block);
-                                block_hashes.push(block.hash());
+                        
+                            if !blockchain_lock.contains_block(block.hash()) && (block.hash() <= block.get_difficulty()) {
+                                if !blockchain_lock.contains_block(block.get_parent()) {
+                                    peer.write(Message::GetBlocks(vec![block.hash()]));
+                                    orphans.insert(block.get_parent(), block);
+                                }
+                                else {
+                                    if block.get_difficulty() == blockchain_lock.get_block(block.get_parent()).get_difficulty() {
+                                       blockchain_lock.insert(&block);
+                                        block_hashes.push(block.hash());
+                                        let mut parent = block.hash();
+                                        let mut pdiff = block.get_difficulty();
+                                        while orphans.contains_key(&parent) {
+
+                                            let mut oblock = orphans.get(&parent).unwrap().clone();
+                                            if oblock.get_difficulty() == pdiff {
+                                                blockchain_lock.insert(&oblock);
+                                                block_hashes.push(oblock.hash());
+                                                orphans.remove(&parent);
+                                                parent = oblock.hash();
+                                            }
+                                            else {
+                                                orphans.remove(&parent);
+                                                break
+                                            }
+                                            
+                                        } 
+                                    }
+                                    
+                                }   
                             }
                         }
                     }
