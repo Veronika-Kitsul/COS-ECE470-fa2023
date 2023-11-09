@@ -11,6 +11,7 @@ pub mod generator;
 
 use blockchain::Blockchain;
 use crate::types::mempool::Mempool;
+use crate::generator::generator::TransactionGenerator;
 use clap::clap_app;
 use smol::channel;
 use log::{error, info};
@@ -96,6 +97,10 @@ fn main() {
     miner_ctx.start();
     miner_worker_ctx.start();
 
+    // create tx generator
+    let txgen = TransactionGenerator::new(&mempool, &server);
+    // txgen.start();
+
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
         let known_peers: Vec<String> = known_peers.map(|x| x.to_owned()).collect();
@@ -129,14 +134,13 @@ fn main() {
         });
     }
 
-
     // start the API server
     ApiServer::start(
         api_addr,
         &miner,
+        &txgen,
         &server,
         &blockchain,
-        // pass our generator
     );
 
     loop {

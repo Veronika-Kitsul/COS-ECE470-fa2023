@@ -1,23 +1,21 @@
 use serde::{Serialize,Deserialize};
-use ring::signature;
 use ring::signature::{Ed25519KeyPair, Signature};
-use rand::Rng;
 use crate::types::address::Address;
 use crate::types::hash::{Hashable, H256};
 use crate::types::block;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
-    Receiver: Address,
-    Value: i32,
-    nonce: u32
+    pub Receiver: Address,
+    pub Value: i32,
+    pub nonce: u32
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Hashable)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct SignedTransaction {
-    signer_pk : [u8; 32],
-    transaction : Transaction,
-    signature : Vec<u8>,
+    pub signer_pk : Vec<u8>,
+    pub transaction : Transaction,
+    pub signature : Vec<u8>,
 }
 
 /// Create digital signature of a transaction

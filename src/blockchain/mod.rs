@@ -1,11 +1,9 @@
 use crate::types::block::{Block};
-use crate::types::block;
 use crate::types::hash::{H256, Hashable};
 use std::collections::HashMap;
-use rand::Rng;
 use hex_literal::hex;
 use crate::types::transaction::SignedTransaction;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime};
 
 pub struct Blockchain {
     map : HashMap<H256, Block>,
@@ -18,7 +16,7 @@ impl Blockchain {
         //let mut rng = rand::thread_rng();
         //let n = rng.gen_range(0..u32::MAX);
         let n = 5;
-        let d = hex!("00002fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
+        let d = hex!("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
         
         let now = SystemTime::now();
         // let time = now.duration_since(UNIX_EPOCH).unwrap().as_millis();

@@ -160,24 +160,31 @@ impl Context {
 
             // add transactions from mempoool here !!!!!!______________________
             let transactions : Vec<SignedTransaction>;
-            let mintrans = 0;
-            let maxtrans = 10;
+            let mintrans = 3;
+            let maxtrans = 100;
             {
                 let mempool_lock = self.mempool.lock().unwrap();
-                transactions = mempool_lock.get_max(&maxtrans);
+                transactions = mempool_lock.get_max(maxtrans);
             }
             
             let mut block = Block :: new(parent, nonce, pblock.get_difficulty(), timestamp, pblock.get_to_genesis() + 1, transactions);
             
             // if block mining finished, send to channel
-            if block.hash() <= block.get_difficulty() && transactions.len() >= mintrans {
+            if block.hash() <= block.get_difficulty() && block.get_transactions().len() >= mintrans {
                 self.finished_block_chan.send(block.clone()).expect("Send finished block error");
 
-                // DO WE HAVE TO REMOVE THIS LATER ???
+                {
+                    let mut mempool_lock = self.mempool.lock().unwrap();
+                    for t in block.get_transaction_hashes() {
+                        mempool_lock.rm_transaction(t);
+                    }
+                    
+                }
                 {
                     let mut blockchain_lock = self.blockchain.lock().unwrap();
                     blockchain_lock.insert(&block); 
                 }
+               
                 
             }
            

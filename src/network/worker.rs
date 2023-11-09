@@ -55,7 +55,6 @@ impl Worker {
     fn worker_loop(&self) {
         let mut orphans : HashMap<H256, Block> = HashMap::new();
         loop {
-            println!("In the mining loop");
             let result = smol::block_on(self.msg_chan.recv());
             if let Err(e) = result {
                 error!("network worker terminated {}", e);
@@ -90,14 +89,12 @@ impl Worker {
                 Message::GetBlocks(hash_vector) => {
                     let mut blocks : Vec<Block> = Vec::new();
                     {
-                        println!("About to lock blockchain 1...");
                         let blockchain_lock = self.blockchain.lock().unwrap();
                         for blockhash in hash_vector {
                             if blockchain_lock.contains_block(blockhash) {
                                 blocks.push(blockchain_lock.get_block(blockhash));
                             }
                         }
-                        println!("About to drop the lock on blockchain 1...");
                     }
                     if blocks.len() > 0 {
                         peer.write(Message::Blocks(blocks));
@@ -105,8 +102,8 @@ impl Worker {
                 }
                 Message::Blocks(block_vec) => {
                     let mut block_hashes : Vec<H256> = Vec::new();
+                    let mut blocks_added: Vec<Block> = Vec::new();
                     {
-                        println!("About to lock blockchain 2...");
                         let mut blockchain_lock = self.blockchain.lock().unwrap();
                         for block in block_vec {
                         
@@ -117,7 +114,8 @@ impl Worker {
                                 }
                                 else {
                                     if block.get_difficulty() == blockchain_lock.get_block(block.get_parent()).get_difficulty() {
-                                       blockchain_lock.insert(&block);
+                                        blockchain_lock.insert(&block);
+                                        blocks_added.push(block.clone());
                                         block_hashes.push(block.hash());
                                         let mut parent = block.hash();
                                         let mut pdiff = block.get_difficulty();
@@ -127,6 +125,7 @@ impl Worker {
                                             let mut oblock = orphans.get(&parent).unwrap().clone();
                                             if oblock.get_difficulty() == pdiff {
                                                 blockchain_lock.insert(&oblock);
+                                                blocks_added.push(oblock.clone());
                                                 block_hashes.push(oblock.hash());
                                                 orphans.remove(&parent);
                                                 parent = oblock.hash();
@@ -140,10 +139,21 @@ impl Worker {
                                 }   
                             }
                         }
-                        println!("About to drop the lock on blockchain 2...");
                     }
+                    
+                    {
+                        let mut mempool_lock = self.mempool.lock().unwrap();
+                        for ablock in blocks_added {
+                            for transaction in ablock.get_transaction_hashes(){
+                                mempool_lock.rm_transaction(transaction);
+                            }
+                        }
+                        
+                    }
+                    
                     if block_hashes.len() > 0 {
                         self.server.broadcast(Message:: NewBlockHashes(block_hashes));
+
                     }
                 }
                 Message::NewTransactionHashes(transaction_hashes) => {
@@ -181,8 +191,8 @@ impl Worker {
                         for transaction in transactions {
                         
                             if !mempool_lock.contains_transaction(transaction.hash()) {
-                                mempool_lock.add_transaction(transaction);
                                 hashes.push(transaction.hash());
+                                mempool_lock.add_transaction(transaction);
                             }
                         }
                     }

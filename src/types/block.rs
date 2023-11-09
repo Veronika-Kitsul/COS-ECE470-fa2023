@@ -1,10 +1,8 @@
 use serde::{Serialize, Deserialize};
 use crate::types::hash::{H256, Hashable};
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::types::transaction::SignedTransaction;
 use super::merkle:: MerkleTree;
 use ring::digest;
-use rand::Rng;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Block {
@@ -99,7 +97,7 @@ impl Content {
     }
 
     pub fn transactions(&self) -> Vec<SignedTransaction> {
-        return self.transactions;
+        return self.transactions.clone();
     }
 
 }
@@ -137,6 +135,14 @@ impl Block {
 
     pub fn get_transactions(&self) -> Vec<SignedTransaction> {
         return self.content.transactions();
+    }
+
+    pub fn get_transaction_hashes(&self) -> Vec<H256> {
+        let mut hashes : Vec<H256> = Vec::new();
+        for t in self.content.transactions() {
+            hashes.push(t.hash());
+        }
+        return hashes;
     }
 }
 

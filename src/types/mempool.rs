@@ -19,11 +19,11 @@ impl Mempool {
 
     // check if transaction is in mempool
     pub fn contains_transaction(&self, hash: H256) -> bool{
-        self.transations.contains(hash)
+        self.transactions.contains_key(&hash)
     }
 
     // remove transaction from the mempool and return it
-    pub fn rm_transaction(&self, hash: H256) -> SignedTransaction{
+    pub fn rm_transaction(&mut self, hash: H256) -> SignedTransaction{
         self.transactions.remove(&hash).unwrap()
     }
 
@@ -33,13 +33,13 @@ impl Mempool {
     }
 
     // add transaction to the mempool
-    pub fn add_transaction(&self, transaction : SignedTransaction) {
+    pub fn add_transaction(&mut self, transaction : SignedTransaction) {
         self.transactions.insert(transaction.hash(), transaction);
     }
 
-    pub fn get_max(&self, max : u8) -> Vec<SignedTransaction> {
-        let entries = &max.min(self.transactions.len());
-        let values: Vec<SignedTransaction> = self.transactions.into_iter().take(entries).map(|(_, value)| value).collect();
-        return values;
-    }
+    pub fn get_max(&self, max: u8) -> Vec<SignedTransaction> {
+        let entries = (max as usize).min(self.transactions.len());
+        let values: Vec<SignedTransaction> = self.transactions.iter().take(entries).map(|(_, value)| value.clone()).collect();
+        values
+    }    
 }

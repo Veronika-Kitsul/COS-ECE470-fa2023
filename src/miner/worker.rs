@@ -5,7 +5,6 @@ use crate::network::server::Handle as ServerHandle;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use crate::blockchain::Blockchain;
-use std::collections::HashMap;
 use crate::network::message::Message;
 use crate::types::hash::{H256, Hashable};
 use crate::types::mempool::Mempool;
@@ -47,12 +46,6 @@ impl Worker {
         loop {
             let _block = self.finished_block_chan.recv().expect("Receive finished block error");
             let mut block_vec : Vec<H256> = Vec::new();
-            {
-                let mut mempool_lock = self.mempool.lock().unwrap();
-                for transaction in _block.get_transactions(){
-                    mempool_lock.rm_transaction(transaction.hash());
-                }
-            }
             {
                 let mut blockchain_lock = self.blockchain.lock().unwrap();
                 blockchain_lock.insert(&_block);
