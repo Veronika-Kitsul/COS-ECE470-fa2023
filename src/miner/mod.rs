@@ -11,6 +11,7 @@ use crate::types::block::Block;
 use crate::blockchain::Blockchain;
 use crate::types::transaction::SignedTransaction;
 use crate::types::hash::{H256, Hashable};
+use crate::types::mempool::Mempool;
 
 enum ControlSignal {
     Start(u64), // the number controls the lambda of interval between block generation
@@ -30,6 +31,7 @@ pub struct Context {
     operating_state: OperatingState,
     finished_block_chan: Sender<Block>,
     blockchain : Arc<Mutex<Blockchain>>,
+    mempool: Arc<Mutex<Mempool>>,
 }
 
 #[derive(Clone)]
@@ -38,7 +40,7 @@ pub struct Handle {
     control_chan: Sender<ControlSignal>,
 }
 
-pub fn new(bc: &Arc<Mutex<Blockchain>>) -> (Context, Handle, Receiver<Block>) {
+pub fn new(bc: &Arc<Mutex<Blockchain>>, mp: &Arc<Mutex<Mempool>>) -> (Context, Handle, Receiver<Block>) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let (finished_block_sender, finished_block_receiver) = unbounded();
 
@@ -47,6 +49,7 @@ pub fn new(bc: &Arc<Mutex<Blockchain>>) -> (Context, Handle, Receiver<Block>) {
         operating_state: OperatingState::Paused,
         finished_block_chan: finished_block_sender,
         blockchain : Arc::clone(bc),
+        mempool: Arc::clone(mp),
     };
 
     let handle = Handle {
@@ -60,7 +63,9 @@ pub fn new(bc: &Arc<Mutex<Blockchain>>) -> (Context, Handle, Receiver<Block>) {
 fn test_new() -> (Context, Handle, Receiver<Block>) {
     let blockchain = Blockchain::new();
     let blockchain = Arc::new(Mutex::new(blockchain));
-    return new(&blockchain);
+    let mempool = Mempool::new();
+    let mempool = Arc::new(Mutex::new(mempool));
+    return new(&blockchain, &mempool);
 }
 
 impl Handle {
@@ -152,16 +157,28 @@ impl Context {
             
             let now = SystemTime::now();
             let timestamp = now.duration_since(UNIX_EPOCH).unwrap().as_millis();
-            let transactions : Vec<SignedTransaction> =   Vec:: new();
+
+            // add transactions from mempoool here !!!!!!______________________
+            let transactions : Vec<SignedTransaction>;
+            let mintrans = 0;
+            let maxtrans = 10;
+            {
+                let mempool_lock = self.mempool.lock().unwrap();
+                transactions = mempool_lock.get_max(&maxtrans);
+            }
+            
             let mut block = Block :: new(parent, nonce, pblock.get_difficulty(), timestamp, pblock.get_to_genesis() + 1, transactions);
             
             // if block mining finished, send to channel
-            if block.hash() <= block.get_difficulty() {
+            if block.hash() <= block.get_difficulty() && transactions.len() >= mintrans {
                 self.finished_block_chan.send(block.clone()).expect("Send finished block error");
 
                 // DO WE HAVE TO REMOVE THIS LATER ???
-                let mut blockchain_lock = self.blockchain.lock().unwrap();
-                blockchain_lock.insert(&block);
+                {
+                    let mut blockchain_lock = self.blockchain.lock().unwrap();
+                    blockchain_lock.insert(&block); 
+                }
+                
             }
            
             if let OperatingState::Run(i) = self.operating_state {

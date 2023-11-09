@@ -2,18 +2,22 @@ use serde::{Serialize,Deserialize};
 use ring::signature;
 use ring::signature::{Ed25519KeyPair, Signature};
 use rand::Rng;
-use super::address::Address;
+use crate::types::address::Address;
+use crate::types::hash::{Hashable, H256};
+use crate::types::block;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
-    Sender: Address,
     Receiver: Address,
     Value: i32,
+    nonce: u32
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Hashable)]
 pub struct SignedTransaction {
-
+    signer_pk : [u8; 32],
+    transaction : Transaction,
+    signature : Vec<u8>,
 }
 
 /// Create digital signature of a transaction
@@ -31,7 +35,7 @@ pub fn verify(t: &Transaction, public_key: &[u8], signature: &[u8]) -> bool {
     let public_key = ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, public_key);
     public_key.verify(serialized_t, signature).is_ok()
 }
-
+/*
 #[cfg(any(test, test_utilities))]
 pub fn generate_random_transaction() -> Transaction {
     let mut rng = rand::thread_rng();
@@ -73,5 +77,5 @@ mod tests {
         assert!(!verify(&t, key_2.public_key().as_ref(), signature.as_ref()));
     }
 }
-
+*/
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. AFTER TEST

@@ -98,6 +98,10 @@ impl Content {
         return tree.root();
     }
 
+    pub fn transactions(&self) -> Vec<SignedTransaction> {
+        return self.transactions;
+    }
+
 }
 
 impl Block {
@@ -129,6 +133,10 @@ impl Block {
 
     pub fn get_root(&self) -> H256 {
         return self.content.root();
+    }
+
+    pub fn get_transactions(&self) -> Vec<SignedTransaction> {
+        return self.content.transactions();
     }
 }
 

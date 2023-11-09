@@ -5,6 +5,8 @@ use crate::types::hash::{H256, Hashable};
 use std::sync::{Arc, Mutex};
 use crate::blockchain::Blockchain;
 use crate::types::block::Block;
+use crate::types::transaction::SignedTransaction;
+use crate::types::mempool::Mempool;
 use std::collections::HashMap;
 
 use log::{debug, warn, error};
@@ -21,19 +23,21 @@ pub struct Worker {
     num_worker: usize,
     server: ServerHandle,
     blockchain: Arc<Mutex<Blockchain>>,
+    mempool : Arc<Mutex<Mempool>>,
 }
 
 impl Worker {
     pub fn new(
         num_worker: usize,
         msg_src: smol::channel::Receiver<(Vec<u8>, peer::Handle)>,
-        server: &ServerHandle, bc: &Arc<Mutex<Blockchain>>
+        server: &ServerHandle, bc: &Arc<Mutex<Blockchain>>, mp: &Arc<Mutex<Mempool>>
     ) -> Self {
         Self {
             msg_chan: msg_src,
             num_worker,
             server: server.clone(),
             blockchain: Arc::clone(bc),
+            mempool : Arc::clone(mp),
         }
     }
 
@@ -57,6 +61,7 @@ impl Worker {
                 error!("network worker terminated {}", e);
                 break;
             }
+
             let msg = result.unwrap();
             let (msg, mut peer) = msg;
             let msg: Message = bincode::deserialize(&msg).unwrap();
@@ -141,6 +146,50 @@ impl Worker {
                         self.server.broadcast(Message:: NewBlockHashes(block_hashes));
                     }
                 }
+                Message::NewTransactionHashes(transaction_hashes) => {
+                    let mut transactions : Vec<H256> = Vec::new();
+                    {
+                        let mempool_lock = self.mempool.lock().unwrap();
+                        for trans_hash in transaction_hashes {
+                            if !mempool_lock.contains_transaction(trans_hash) {
+                                transactions.push(trans_hash);
+                            }
+                        }
+                    }
+                    if transactions.len() > 0 {
+                        peer.write(Message::GetTransactions(transactions));
+                    }
+                }
+                Message::GetTransactions(transaction_hashes) => {
+                    let mut transactions : Vec<SignedTransaction> = Vec::new();
+                    {
+                        let mempool_lock = self.mempool.lock().unwrap();
+                        for trans_hash in transaction_hashes {
+                            if mempool_lock.contains_transaction(trans_hash) {
+                                transactions.push(mempool_lock.get_transaction(trans_hash));
+                            }
+                        }
+                    }
+                    if transactions.len() > 0 {
+                        peer.write(Message::Transactions(transactions));
+                    }
+                }
+                Message::Transactions(transactions) => {
+                    let mut hashes : Vec<H256> = Vec::new();
+                    {
+                        let mut mempool_lock = self.mempool.lock().unwrap();
+                        for transaction in transactions {
+                        
+                            if !mempool_lock.contains_transaction(transaction.hash()) {
+                                mempool_lock.add_transaction(transaction);
+                                hashes.push(transaction.hash());
+                            }
+                        }
+                    }
+                    if hashes.len() > 0 {
+                        self.server.broadcast(Message:: NewTransactionHashes(hashes));
+                    }
+                }
                 _ => { 
                     
                 }
@@ -174,7 +223,9 @@ fn generate_test_worker_and_start() -> (TestMsgSender, ServerTestReceiver, Vec<H
     let (test_msg_sender, msg_chan) = TestMsgSender::new();
     let blockchain = Blockchain::new();
     let blockchain = Arc::new(Mutex::new(blockchain));
-    let worker = Worker::new(1, msg_chan, &server, &blockchain);
+    let mempool =  Mempool::new();
+    let mempool = Arc::new(Mutex::new(mempool));
+    let worker = Worker::new(1, msg_chan, &server, &blockchain, &mp);
     let mut hashes : Vec<H256>;
     {
         let mut blockchain_lock = worker.blockchain.lock().unwrap();

@@ -10,6 +10,7 @@ pub mod network;
 pub mod generator;
 
 use blockchain::Blockchain;
+use crate::types::mempool::Mempool;
 use clap::clap_app;
 use smol::channel;
 use log::{error, info};
@@ -36,9 +37,12 @@ fn main() {
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
+    
     let blockchain = Blockchain::new();
-    println!("genesis: {:?}", blockchain.all_blocks_in_longest_chain().get(0));
     let blockchain = Arc::new(Mutex::new(blockchain));
+    let mempool = Mempool::new();
+    let mempool = Arc::new(Mutex::new(mempool));
+
     // parse p2p server address
     let p2p_addr = matches
         .value_of("peer_addr")
@@ -82,12 +86,13 @@ fn main() {
         msg_rx,
         &server,
         &blockchain,
+        &mempool
     );
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner, finished_block_chan) = miner::new(&blockchain);
-    let miner_worker_ctx = miner::worker::Worker::new(&server, finished_block_chan, &blockchain);
+    let (miner_ctx, miner, finished_block_chan) = miner::new(&blockchain, &mempool);
+    let miner_worker_ctx = miner::worker::Worker::new(&server, finished_block_chan, &blockchain, &mempool);
     miner_ctx.start();
     miner_worker_ctx.start();
 
@@ -131,6 +136,7 @@ fn main() {
         &miner,
         &server,
         &blockchain,
+        // pass our generator
     );
 
     loop {
