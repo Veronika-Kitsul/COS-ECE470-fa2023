@@ -160,8 +160,8 @@ impl Context {
 
             // add transactions from mempoool here !!!!!!______________________
             let transactions : Vec<SignedTransaction>;
-            let mintrans = 3;
-            let maxtrans = 100;
+            let mintrans = 10;
+            let maxtrans = 30;
             {
                 let mempool_lock = self.mempool.lock().unwrap();
                 transactions = mempool_lock.get_max(maxtrans);
