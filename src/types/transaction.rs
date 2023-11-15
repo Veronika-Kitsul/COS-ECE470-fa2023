@@ -6,6 +6,7 @@ use crate::types::block;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
+    pub Sender: Address,
     pub Receiver: Address,
     pub Value: i32,
     pub nonce: u32
@@ -17,6 +18,7 @@ pub struct SignedTransaction {
     pub transaction : Transaction,
     pub signature : Vec<u8>,
 }
+
 
 /// Create digital signature of a transaction
 pub fn sign(t: &Transaction, key: &Ed25519KeyPair) -> Signature {
@@ -33,6 +35,8 @@ pub fn verify(t: &Transaction, public_key: &[u8], signature: &[u8]) -> bool {
     let public_key = ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, public_key);
     public_key.verify(serialized_t, signature).is_ok()
 }
+
+
 /*
 #[cfg(any(test, test_utilities))]
 pub fn generate_random_transaction() -> Transaction {

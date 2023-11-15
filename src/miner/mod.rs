@@ -12,6 +12,7 @@ use crate::blockchain::Blockchain;
 use crate::types::transaction::SignedTransaction;
 use crate::types::hash::{H256, Hashable};
 use crate::types::mempool::Mempool;
+use crate::types::state::State;
 
 enum ControlSignal {
     Start(u64), // the number controls the lambda of interval between block generation
@@ -32,6 +33,7 @@ pub struct Context {
     finished_block_chan: Sender<Block>,
     blockchain : Arc<Mutex<Blockchain>>,
     mempool: Arc<Mutex<Mempool>>,
+    state: Arc<Mutex<State>>,
 }
 
 #[derive(Clone)]
@@ -40,7 +42,7 @@ pub struct Handle {
     control_chan: Sender<ControlSignal>,
 }
 
-pub fn new(bc: &Arc<Mutex<Blockchain>>, mp: &Arc<Mutex<Mempool>>) -> (Context, Handle, Receiver<Block>) {
+pub fn new(bc: &Arc<Mutex<Blockchain>>, mp: &Arc<Mutex<Mempool>>, st: &Arc<Mutex<State>>) -> (Context, Handle, Receiver<Block>) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let (finished_block_sender, finished_block_receiver) = unbounded();
 
@@ -50,6 +52,7 @@ pub fn new(bc: &Arc<Mutex<Blockchain>>, mp: &Arc<Mutex<Mempool>>) -> (Context, H
         finished_block_chan: finished_block_sender,
         blockchain : Arc::clone(bc),
         mempool: Arc::clone(mp),
+        state: Arc::clone(st),
     };
 
     let handle = Handle {
@@ -180,9 +183,34 @@ impl Context {
                     }
                     
                 }
+                let mut bstate: State;
+                {
+                    let mut state_lock = self.state.lock().unwrap();
+                    for trans in block.get_transactions() {
+                        let r = trans.transaction.Receiver;
+                        let s = trans.transaction.Sender;
+
+                        // receiver
+                        if (state_lock.contains_account(r)) {
+                            state_lock.add_account(r, state_lock.get_nonce(r), state_lock.get_value(r) + trans.transaction.Value);
+                        }
+                        else {
+                            state_lock.add_account(r, 0, trans.transaction.Value);
+                        }
+
+                        // sender
+                        if (state_lock.contains_account(s)) {
+                            state_lock.add_account(s, state_lock.get_nonce(s) + 1, state_lock.get_value(s) - trans.transaction.Value);
+                        }
+                        else {
+                            state_lock.add_account(s, 1, -trans.transaction.Value);
+                        }
+                    }
+                    bstate = state_lock.clone();
+                }
                 {
                     let mut blockchain_lock = self.blockchain.lock().unwrap();
-                    blockchain_lock.insert(&block); 
+                    blockchain_lock.insert(&block, bstate); 
                 }
                
                 

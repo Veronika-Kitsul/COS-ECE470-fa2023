@@ -11,6 +11,7 @@ pub mod generator;
 
 use blockchain::Blockchain;
 use crate::types::mempool::Mempool;
+use crate::types::state::State;
 use crate::generator::generator::TransactionGenerator;
 use clap::clap_app;
 use smol::channel;
@@ -43,6 +44,8 @@ fn main() {
     let blockchain = Arc::new(Mutex::new(blockchain));
     let mempool = Mempool::new();
     let mempool = Arc::new(Mutex::new(mempool));
+    let state = State::new();
+    let state = Arc::new(Mutex::new(state));
 
     // parse p2p server address
     let p2p_addr = matches
@@ -87,13 +90,14 @@ fn main() {
         msg_rx,
         &server,
         &blockchain,
-        &mempool
+        &mempool,
+        &state,
     );
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner, finished_block_chan) = miner::new(&blockchain, &mempool);
-    let miner_worker_ctx = miner::worker::Worker::new(&server, finished_block_chan, &blockchain, &mempool);
+    let (miner_ctx, miner, finished_block_chan) = miner::new(&blockchain, &mempool, &state);
+    let miner_worker_ctx = miner::worker::Worker::new(&server, finished_block_chan, &blockchain, &mempool, &state);
     miner_ctx.start();
     miner_worker_ctx.start();
 

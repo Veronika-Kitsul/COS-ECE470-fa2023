@@ -8,6 +8,7 @@ use crate::blockchain::Blockchain;
 use crate::network::message::Message;
 use crate::types::hash::{H256, Hashable};
 use crate::types::mempool::Mempool;
+use crate::types::state::State;
 
 #[derive(Clone)]
 pub struct Worker {
@@ -15,6 +16,7 @@ pub struct Worker {
     finished_block_chan: Receiver<Block>,
     blockchain : Arc<Mutex<Blockchain>>,
     mempool: Arc<Mutex<Mempool>>,
+    state: Arc<Mutex<State>>,
 }
 
 impl Worker {
@@ -23,12 +25,14 @@ impl Worker {
         finished_block_chan: Receiver<Block>,
         bc: &Arc<Mutex<Blockchain>>,
         mp: &Arc<Mutex<Mempool>>,
+        st: &Arc<Mutex<State>>,
     ) -> Self {
         Self {
             server: server.clone(),
             finished_block_chan,
             blockchain : Arc::clone(bc),
             mempool : Arc::clone(mp),
+            state : Arc::clone(st),
         }
     }
 
@@ -46,9 +50,34 @@ impl Worker {
         loop {
             let _block = self.finished_block_chan.recv().expect("Receive finished block error");
             let mut block_vec : Vec<H256> = Vec::new();
+            let mut bstate: State;
+            {
+                let mut state_lock = self.state.lock().unwrap();
+                for trans in _block.get_transactions() {
+                    let r = trans.transaction.Receiver;
+                    let s = trans.transaction.Sender;
+
+                    // receiver
+                    if (state_lock.contains_account(r)) {
+                        state_lock.add_account(r, state_lock.get_nonce(r), state_lock.get_value(r) + trans.transaction.Value);
+                    }
+                    else {
+                        state_lock.add_account(r, 0, trans.transaction.Value);
+                    }
+
+                    // sender
+                    if (state_lock.contains_account(s)) {
+                        state_lock.add_account(s, state_lock.get_nonce(s) + 1, state_lock.get_value(s) - trans.transaction.Value);
+                    }
+                    else {
+                        state_lock.add_account(s, 1, -trans.transaction.Value);
+                    }
+                }
+                bstate = state_lock.clone();
+            }
             {
                 let mut blockchain_lock = self.blockchain.lock().unwrap();
-                blockchain_lock.insert(&_block);
+                blockchain_lock.insert(&_block, bstate);
                 block_vec.push(_block.hash());
                 self.server.broadcast(Message:: NewBlockHashes(block_vec));
             }

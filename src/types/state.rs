@@ -7,12 +7,12 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct State {
-    accounts : HashMap<Address, (u32, u32)>,
+    accounts : HashMap<Address, (u32, i32)>,
 }
 
 impl State {
     pub fn new() -> Self {
-        let mut map : HashMap<Address, (u32, u32)> = HashMap::new();
+        let mut map : HashMap<Address, (u32, i32)> = HashMap::new();
         Self {
             accounts : map,
         }
@@ -26,13 +26,12 @@ impl State {
         self.accounts.get(&a).unwrap().0
     }
 
-    pub fn get_value(&self, a: Address)->u32{
+    pub fn get_value(&self, a: Address)->i32{
         self.accounts.get(&a).unwrap().1
     }
 
-    pub fn add_account(&mut self, a:Address, n:u32, v:u32) {
+    pub fn add_account(&mut self, a:Address, n:u32, v:i32) {
         self.accounts.insert(a, (n, v));
     }
-
 }
 

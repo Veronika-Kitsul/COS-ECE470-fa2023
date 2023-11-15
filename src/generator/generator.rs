@@ -47,9 +47,11 @@ impl TransactionGenerator {
             let mut rng = rand::thread_rng();
             let value = rng.gen_range(0..i32::MAX);
             let n = 0;
+            let sender: [u8; 32] = rng.gen();
             let receiver: [u8; 32] = rng.gen();
             
             let trans = Transaction {
+                Sender: Address::from_public_key_bytes(&sender), 
                 Receiver: Address::from_public_key_bytes(&receiver), 
                 Value: value,
                 nonce: n,

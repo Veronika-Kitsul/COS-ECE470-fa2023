@@ -4,10 +4,12 @@ use std::collections::HashMap;
 use hex_literal::hex;
 use crate::types::transaction::SignedTransaction;
 use std::time::{SystemTime};
+use crate::types::state::State;
 
 pub struct Blockchain {
     map : HashMap<H256, Block>,
     tip : Block,
+    states : HashMap<H256, State>,
 }
 
 impl Blockchain {
@@ -29,23 +31,27 @@ impl Blockchain {
         let genesis =  Block :: new(p, n, d, time, gen, transactions);
         let mut t = genesis.clone();
         let mut m : HashMap<H256, Block> = HashMap :: new();
+        let mut s : HashMap<H256, State> = HashMap :: new();
 
         m.insert(genesis.hash(), genesis);
         Self {
             map : m,
             tip : t,
+            states: s,
         }
     }
 
     /// Insert a block into blockchain
-    pub fn insert(&mut self, block: &Block) {
+    pub fn insert(&mut self, block: &Block, state: State) {
         let len : u32 = self.map.get(&block.get_parent()).unwrap().get_to_genesis();
         let mut new_block = block.clone();
         new_block.set_to_genesis(len + 1);
         if new_block.get_to_genesis() > self.tip.get_to_genesis() {
             self.tip = new_block.clone();
         }
+        let bhash = new_block.hash();
         self.map.insert(new_block.hash(), new_block);
+        self.states.insert(bhash, state.clone());
     }
 
     /// Get the last block's hash of the longest chain
@@ -78,6 +84,7 @@ impl Blockchain {
     pub fn contains_block(&self, hash: H256) -> bool {
         self.map.contains_key(&hash)
     }
+
 }
 
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST
