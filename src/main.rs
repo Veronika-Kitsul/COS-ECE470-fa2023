@@ -39,13 +39,14 @@ fn main() {
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
-    
-    let blockchain = Blockchain::new();
+
+    let state = State::new();
+    let blockchain = Blockchain::new(state.clone());
     let blockchain = Arc::new(Mutex::new(blockchain));
+    let state = Arc::new(Mutex::new(state));
     let mempool = Mempool::new();
     let mempool = Arc::new(Mutex::new(mempool));
-    let state = State::new();
-    let state = Arc::new(Mutex::new(state));
+    
 
     // parse p2p server address
     let p2p_addr = matches
@@ -102,7 +103,7 @@ fn main() {
     miner_worker_ctx.start();
 
     // create tx generator
-    let txgen = TransactionGenerator::new(&mempool, &server);
+    let txgen = TransactionGenerator::new(&mempool, &blockchain, &state, &server);
     // txgen.start();
 
     // connect to known peers

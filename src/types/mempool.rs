@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone)]
 pub struct Mempool {
-    transactions : HashMap<H256, SignedTransaction>,
+    pub transactions : HashMap<H256, SignedTransaction>,
 }
 
 impl Mempool {

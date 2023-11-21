@@ -1,18 +1,32 @@
 use std::collections::HashMap;
+use rand::Rng;
+use ring::signature::{Ed25519KeyPair, KeyPair};
 use super::{
-    hash::{Hashable, H256},
     address::Address,
-    transaction::SignedTransaction,
 };
 
 #[derive(Debug, Clone)]
 pub struct State {
-    accounts : HashMap<Address, (u32, i32)>,
+    pub accounts : HashMap<Address, (u32, i32)>,
 }
 
 impl State {
     pub fn new() -> Self {
         let mut map : HashMap<Address, (u32, i32)> = HashMap::new();
+
+        // Generate a random seed
+        let mut rng = rand::thread_rng();
+        let random_seed: [u8; 32] = rng.gen();
+
+        // Create a key pair
+        let key_pair = Ed25519KeyPair::from_seed_unchecked(&random_seed).unwrap();
+
+        // Get public key bytes and create an address
+        let public_key_bytes = key_pair.public_key().as_ref();
+        let address = Address::from_public_key_bytes(public_key_bytes);
+
+        map.insert(address, (0, i32::MAX));
+        
         Self {
             accounts : map,
         }

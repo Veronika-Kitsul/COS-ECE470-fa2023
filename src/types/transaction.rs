@@ -1,8 +1,6 @@
 use serde::{Serialize,Deserialize};
 use ring::signature::{Ed25519KeyPair, Signature};
 use crate::types::address::Address;
-use crate::types::hash::{Hashable, H256};
-use crate::types::block;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
