@@ -70,12 +70,10 @@ impl TransactionGenerator {
            
             let mut sender;
             let mut sender_value;
-            
-            print!("before generator state lock\n");
+
             {
                 // generate sender
                 let state_lock = self.state.lock().unwrap();
-                print!("obtained state lock\n");
 
                 let mut index = rng.gen_range(0..state_lock.accounts.len());
                 print!("generated index\n");
@@ -83,8 +81,8 @@ impl TransactionGenerator {
                 print!("generated sender\n");
                 sender_value = state_lock.get_value(sender);
 
-                // if sender value == 0, regenerate one
-                while sender_value == 0 {
+                // if sender value ,= 0, regenerate one
+                while sender_value <= 0 {
                     print!("im in sender gen loop\n");
                     index = rng.gen_range(0..state_lock.accounts.len());
                     sender = state_lock.accounts.keys().nth(index).unwrap().clone(); 
@@ -92,9 +90,7 @@ impl TransactionGenerator {
                 } 
 
                 nonce = state_lock.get_nonce(sender) + 1;
-                print!("calculated nonce\n");
             }
-            print!("after generator state lock\n");
             print!("sender val {:?}\n", sender_value);
             value = rng.gen_range(0..sender_value/10 + 1);
             

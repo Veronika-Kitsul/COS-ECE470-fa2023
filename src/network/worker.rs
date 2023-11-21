@@ -60,7 +60,6 @@ impl Worker {
     fn worker_loop(&self) {
         let mut orphans : HashMap<H256, Block> = HashMap::new();
         loop {
-            print!("IN NETWORK\n");
             let result = smol::block_on(self.msg_chan.recv());
             if let Err(e) = result {
                 error!("network worker terminated {}", e);
@@ -156,60 +155,61 @@ impl Worker {
                     let mut block_hashes : Vec<H256> = Vec::new();
                     for ablock in &blocks_added {
                         let mut is_valid = true;
-
+                        let mut bstate: State;
+                        {
+                            let mut state_lock = self.state.lock().unwrap();
+                            bstate = state_lock.clone();
+                        }
                         for trans in ablock.get_transactions() {
                             let r = trans.transaction.Receiver;
                             let s = trans.transaction.Sender;
-                                
-                            {
-                                print!("OSL miner worker 1\n");
-                                let mut state_lock = self.state.lock().unwrap();
-                                print!("SSL miner worker 1\n");
+                            
+                            //transaction checks
+                            if !bstate.contains_account(s) || 
+                                !transaction::verify(&trans.transaction, trans.signer_pk.as_ref(), trans.signature.as_ref()) ||
+                                (bstate.get_value(s) - trans.transaction.Value) < 0  {
             
-                                // //transaction checks
-                                // print!("worker miner: state lock contains: {:?}\n", state_lock.contains_account(s));
-                                // print!("worker miner: transaction verification: {:?}\n", 
-                                //     transaction::verify(&trans.transaction, trans.signer_pk.as_ref(), trans.signature.as_ref()));
-                                // print!("worker miner: transaction value: {:?} and account value: {:?}\n", 
-                                //     state_lock.get_value(s), trans.transaction.Value);
-            
-                                if !state_lock.contains_account(s) || 
-                                    !transaction::verify(&trans.transaction, trans.signer_pk.as_ref(), trans.signature.as_ref()) ||
-                                    state_lock.get_value(s) < trans.transaction.Value {
-            
-                                    is_valid = false;
-                                }                                
+                                is_valid = false;
+                                break;
                             }
-                            print!("RSL miner worker\n");
+                            else {
+                                let r = trans.transaction.Receiver;
+                                let s = trans.transaction.Sender;
+                                let nonce = bstate.get_nonce(s);
+                                let val = bstate.get_value(s);
+                                bstate.add_account(s, nonce + 1, val - trans.transaction.Value);
+            
+                                // receiver
+                                if bstate.contains_account(r) {
+                                    let nonce = bstate.get_nonce(r);
+                                    let val = bstate.get_value(r);
+                                    bstate.add_account(r, nonce,  val + trans.transaction.Value);
+                                }
+                                else {
+                                    bstate.add_account(r, 0, trans.transaction.Value);
+                                }
+                            }                                
                         }
 
                         // add block
                         if is_valid {
                             print!("the block is valid in network worker\n");
-                            let mut bstate : State;
+                            
                             {
                                 let mut state_lock = self.state.lock().unwrap();
-
-                                for trans in ablock.get_transactions() {
-                                    let r = trans.transaction.Receiver;
-                                    let s = trans.transaction.Sender;
-                                    let nonce = state_lock.get_nonce(s);
-                                    let val = state_lock.get_value(s);
-                                    state_lock.add_account(s, nonce + 1, val - trans.transaction.Value);
-                                    print!("net/worker trans val: {:?} acc val: {:?}  sender: {:?}\n", trans.transaction.Value, val, s);
-                                    // receiver
-                                    if (state_lock.contains_account(r)) {
-                                        let nonce = state_lock.get_nonce(r);
-                                        let val = state_lock.get_value(r);
-                                        state_lock.add_account(r, nonce,  val + trans.transaction.Value);
-                                    }
-                                    else {
-                                        state_lock.add_account(r, 0, trans.transaction.Value);
-                                    }
-                                }
-
-                                bstate = state_lock.clone();
+                                *state_lock = bstate.clone();
                             }
+
+                            // mempool copy for individual blocks
+                            let mempool_copy;
+                            {
+                                let mut mempool_lock = self.mempool.lock().unwrap();
+                                for t in ablock.get_transaction_hashes() {
+                                    mempool_lock.rm_transaction(t);
+                                }
+                                mempool_copy = mempool_lock.transactions.clone();
+                            }
+
                             {
                                 print!("im inserting a block in network worker\n");
                                 let mut blockchain_lock = self.blockchain.lock().unwrap();
@@ -217,13 +217,6 @@ impl Worker {
                                 blockchain_lock.insert(&ablock, bstate);
                             }
 
-                            // mempool copy for individual blocks
-                            let mempool_copy;
-                            {
-                                let mut mempool_lock = self.mempool.lock().unwrap();
-                                mempool_copy = mempool_lock.transactions.clone();
-                            }
-        
                             // can't loop through mempool - avoid nested locks, so created copy
                             let mut thashes: Vec<H256> = Vec::new();
                             for (key, trans) in mempool_copy {
