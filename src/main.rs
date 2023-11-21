@@ -46,7 +46,6 @@ fn main() {
     let state = Arc::new(Mutex::new(state));
     let mempool = Mempool::new();
     let mempool = Arc::new(Mutex::new(mempool));
-    
 
     // parse p2p server address
     let p2p_addr = matches

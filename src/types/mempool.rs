@@ -23,8 +23,10 @@ impl Mempool {
     }
 
     // remove transaction from the mempool and return it
-    pub fn rm_transaction(&mut self, hash: H256) -> SignedTransaction{
-        self.transactions.remove(&hash).unwrap()
+    pub fn rm_transaction(&mut self, hash: H256) {
+        if self.transactions.contains_key(&hash) {
+            self.transactions.remove(&hash);
+        }
     }
 
     // get a transaction

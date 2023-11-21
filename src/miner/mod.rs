@@ -165,11 +165,10 @@ impl Context {
 
             // add transactions from mempoool here !!!!!!
             let transactions : Vec<SignedTransaction>;
-            let mintrans = 1;
+            let mintrans = 3;
             let maxtrans = 30;
             {
                 let mempool_lock = self.mempool.lock().unwrap();
-                // print!("mempool size: {:?}\n", mempool_lock.transactions.keys().len());
                 transactions = mempool_lock.get_max(maxtrans);
             }
             
@@ -225,7 +224,7 @@ impl Context {
                     {
                         let mut blockchain_lock = self.blockchain.lock().unwrap();
                         blockchain_lock.insert(&ablock, bstate);
-                        print!("inserted block in mod miner");
+                        print!("inserted block in mod miner\n");
                     }
 
                     // mempool copy for individual blocks
