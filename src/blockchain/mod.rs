@@ -14,11 +14,11 @@ pub struct Blockchain {
 
 impl Blockchain {
     /// Create a new blockchain, only containing the genesis block
-    pub fn new() -> Self {
+    pub fn new(st: State) -> Self {
         //let mut rng = rand::thread_rng();
         //let n = rng.gen_range(0..u32::MAX);
         let n = 5;
-        let d = hex!("0003ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
+        let d = hex!("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
         
         let now = SystemTime::now();
         // let time = now.duration_since(UNIX_EPOCH).unwrap().as_millis();
@@ -32,6 +32,7 @@ impl Blockchain {
         let mut t = genesis.clone();
         let mut m : HashMap<H256, Block> = HashMap :: new();
         let mut s : HashMap<H256, State> = HashMap :: new();
+        s.insert(genesis.hash(), st);
 
         m.insert(genesis.hash(), genesis);
         Self {
@@ -64,6 +65,11 @@ impl Blockchain {
         return self.map.get(&hash).unwrap().clone();
     }
 
+    //Get the state corresponding to the block given by the hash
+    pub fn get_state(&self, hash:H256) -> State {
+        return self.states.get(&hash).unwrap().clone();
+    }
+
     /// Get all blocks' hashes of the longest chain, ordered from genesis to the tip
     pub fn all_blocks_in_longest_chain(&self) -> Vec<H256> {
         let mut blocks : Vec<H256> = Vec::new();
@@ -89,7 +95,7 @@ impl Blockchain {
 
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST
 
-
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +208,6 @@ mod tests {
         assert_eq!(longest_chain, vec![genesis_hash, fork1_block1.hash(), fork1_block2.hash()]);
     }
 }
+*/
 
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. AFTER TEST

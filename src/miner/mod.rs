@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex};
 use crate::types::block::Block;
 use crate::blockchain::Blockchain;
 use crate::types::transaction::SignedTransaction;
+use crate::types::transaction;
+use crate::types::transaction::{Transaction, verify};
 use crate::types::hash::{H256, Hashable};
 use crate::types::mempool::Mempool;
 use crate::types::state::State;
@@ -150,7 +152,10 @@ impl Context {
             // actual mining, create a block
             let mut parent;
             let mut pblock;
+
+            // generating a new block
             {
+                // get current tip 
                 let blockchain_lock = self.blockchain.lock().unwrap();
                 parent = blockchain_lock.tip();
                 pblock = blockchain_lock.get_block(parent);
@@ -161,60 +166,107 @@ impl Context {
             let now = SystemTime::now();
             let timestamp = now.duration_since(UNIX_EPOCH).unwrap().as_millis();
 
-            // add transactions from mempoool here !!!!!!______________________
+            // add transactions from mempoool here
             let transactions : Vec<SignedTransaction>;
-            let mintrans = 10;
-            let maxtrans = 30;
+            let mintrans : usize = 5;
+            let maxtrans : usize = 30;
             {
                 let mempool_lock = self.mempool.lock().unwrap();
-                transactions = mempool_lock.get_max(maxtrans);
+                transactions = mempool_lock.get_max(maxtrans, mintrans);
             }
             
-            let mut block = Block :: new(parent, nonce, pblock.get_difficulty(), timestamp, pblock.get_to_genesis() + 1, transactions);
+            let mut ablock = Block :: new(parent, nonce, pblock.get_difficulty(), timestamp, pblock.get_to_genesis() + 1, transactions);
             
             // if block mining finished, send to channel
-            if block.hash() <= block.get_difficulty() && block.get_transactions().len() >= mintrans {
-                self.finished_block_chan.send(block.clone()).expect("Send finished block error");
-
-                {
-                    let mut mempool_lock = self.mempool.lock().unwrap();
-                    for t in block.get_transaction_hashes() {
-                        mempool_lock.rm_transaction(t);
-                    }
-                    
-                }
-                let mut bstate: State;
+            let mut is_valid = true;
+            let mut bstate: State;
+            if ablock.hash() <= ablock.get_difficulty() && ablock.get_transactions().len() > 0 {
                 {
                     let mut state_lock = self.state.lock().unwrap();
-                    for trans in block.get_transactions() {
-                        let r = trans.transaction.Receiver;
-                        let s = trans.transaction.Sender;
-
-                        // receiver
-                        if (state_lock.contains_account(r)) {
-                            state_lock.add_account(r, state_lock.get_nonce(r), state_lock.get_value(r) + trans.transaction.Value);
-                        }
-                        else {
-                            state_lock.add_account(r, 0, trans.transaction.Value);
-                        }
-
-                        // sender
-                        if (state_lock.contains_account(s)) {
-                            state_lock.add_account(s, state_lock.get_nonce(s) + 1, state_lock.get_value(s) - trans.transaction.Value);
-                        }
-                        else {
-                            state_lock.add_account(s, 1, -trans.transaction.Value);
-                        }
-                    }
                     bstate = state_lock.clone();
                 }
-                {
-                    let mut blockchain_lock = self.blockchain.lock().unwrap();
-                    blockchain_lock.insert(&block, bstate); 
+                for trans in ablock.get_transactions() {
+                    let r = trans.transaction.Receiver;
+                    let s = trans.transaction.Sender;
+                    
+                    //transaction checks
+                    if !bstate.contains_account(s) || 
+                        !transaction::verify(&trans.transaction, trans.signer_pk.as_ref(), trans.signature.as_ref()) ||
+                        (bstate.get_value(s) - trans.transaction.Value) < 0  {
+
+                        is_valid = false;
+                        break;
+                    }
+                    else {
+                        let r = trans.transaction.Receiver;
+                        let s = trans.transaction.Sender;
+                        let nonce = bstate.get_nonce(s);
+                        let val = bstate.get_value(s);
+                        bstate.add_account(s, nonce + 1, val - trans.transaction.Value);
+                        print!("miner/mod trans val: {:?} acc val: {:?}  sender: {:?}\n", trans.transaction.Value, val, s);
+
+                        // receiver
+                        if bstate.contains_account(r) {
+                            let nonce = bstate.get_nonce(r);
+                            let val = bstate.get_value(r);
+                            bstate.add_account(r, nonce,  val + trans.transaction.Value);
+                        }
+                        else {
+                            bstate.add_account(r, 0, trans.transaction.Value);
+                        }
+                    }                                
                 }
-               
                 
+
+                // add block
+                if is_valid {
+                    print!("valid block in mod miner");
+                    {
+                        let mut state_lock = self.state.lock().unwrap();
+                        *state_lock =  bstate.clone();
+                    }
+                    // mempool copy for individual blocks
+                    let mempool_copy;
+                    {
+                        let mut mempool_lock = self.mempool.lock().unwrap();
+                        for t in ablock.get_transaction_hashes() {
+                            mempool_lock.rm_transaction(t);
+                        }
+                        mempool_copy = mempool_lock.transactions.clone();
+                    }
+                    {
+                        let mut blockchain_lock = self.blockchain.lock().unwrap();
+                        blockchain_lock.insert(&ablock, bstate);
+                        print!("inserted block in mod miner\n");
+                    }
+
+                    // can't loop through mempool - avoid nested locks, so created copy
+                    let mut thashes: Vec<H256> = Vec::new();
+                    for (key, trans) in mempool_copy {
+                        {
+                            let state_lock = self.state.lock().unwrap();
+                            let r = trans.transaction.Receiver;
+                            let s = trans.transaction.Sender;
+    
+                            if (!state_lock.contains_account(s) || 
+                            !transaction::verify(&trans.transaction, trans.signer_pk.as_ref(), trans.signature.as_ref()) ||
+                            state_lock.get_value(s) < trans.transaction.Value) {
+                                thashes.push(trans.hash());
+                            }
+                        }
+                    }
+
+                    {
+                        let mut mempool_lock = self.mempool.lock().unwrap();
+                        for t in thashes {
+                            mempool_lock.rm_transaction(t);
+                        }
+                    }
+
+                    self.finished_block_chan.send(ablock.clone()).expect("Send finished block error");
+                } 
             }
+
            
             if let OperatingState::Run(i) = self.operating_state {
                 if i != 0 {

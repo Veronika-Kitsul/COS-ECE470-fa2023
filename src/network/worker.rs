@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex};
 use crate::blockchain::Blockchain;
 use crate::types::block::Block;
 use crate::types::state::State;
-use crate::types::transaction::SignedTransaction;
+use crate::types::transaction;
+use crate::network::worker::transaction::SignedTransaction;
+use crate::types::transaction::{Transaction, verify};
 use crate::types::mempool::Mempool;
 use std::collections::HashMap;
 
@@ -104,14 +106,17 @@ impl Worker {
                     }
                 }
                 Message::Blocks(block_vec) => {
-                    let mut block_hashes : Vec<H256> = Vec::new();
                     let mut blocks_added: Vec<Block> = Vec::new();
 
                     {
-                        let mut blockchain_lock = self.blockchain.lock().unwrap();
+                        let blockchain_lock = self.blockchain.lock().unwrap();
                         for block in block_vec {
+
+                            print!("in worker network blockchain lock contains block hash: {:?}", blockchain_lock.contains_block(block.hash()));
+                            print!("in worker network difficulty works: {:?}", (block.hash() <= block.get_difficulty())); 
                         
                             if !blockchain_lock.contains_block(block.hash()) && (block.hash() <= block.get_difficulty()) {
+
                                 if !blockchain_lock.contains_block(block.get_parent()) {
                                     peer.write(Message::GetBlocks(vec![block.get_parent()]));
                                     orphans.insert(block.get_parent(), block);
@@ -120,17 +125,17 @@ impl Worker {
                                     if block.get_difficulty() == blockchain_lock.get_block(block.get_parent()).get_difficulty() {
                                         //blockchain_lock.insert(&block);
                                         blocks_added.push(block.clone());
-                                        block_hashes.push(block.hash());
+                                        //block_hashes.push(block.hash());
                                         let mut parent = block.hash();
                                         let mut pdiff = block.get_difficulty();
 
                                         while orphans.contains_key(&parent) {
 
-                                            let mut oblock = orphans.get(&parent).unwrap().clone();
+                                            let oblock = orphans.get(&parent).unwrap().clone();
                                             if oblock.get_difficulty() == pdiff {
                                                 //blockchain_lock.insert(&oblock);
                                                 blocks_added.push(oblock.clone());
-                                                block_hashes.push(oblock.hash());
+                                                //block_hashes.push(oblock.hash());
                                                 orphans.remove(&parent);
                                                 parent = oblock.hash();
                                             }
@@ -145,55 +150,101 @@ impl Worker {
                         }
                     }
                     
-                    {
-                        let mut mempool_lock = self.mempool.lock().unwrap();
-                        for ablock in blocks_added {
-                            for transaction in ablock.get_transaction_hashes(){
-                                mempool_lock.rm_transaction(transaction);
-                            }
-                        }
-                        
-                    }
 
                     //update state based on blocks to be added
+                    let mut block_hashes : Vec<H256> = Vec::new();
                     for ablock in &blocks_added {
+                        let mut is_valid = true;
                         let mut bstate: State;
                         {
                             let mut state_lock = self.state.lock().unwrap();
-                            for trans in ablock.get_transactions() {
-                                let r = trans.transaction.Receiver;
-                                let s = trans.transaction.Sender;
-
-                                // receiver
-                                if (state_lock.contains_account(r)) {
-                                    state_lock.add_account(r, state_lock.get_nonce(r), state_lock.get_value(r) + trans.transaction.Value);
-                                }
-                                else {
-                                    state_lock.add_account(r, 0, trans.transaction.Value);
-                                }
-
-                                // sender
-                                if (state_lock.contains_account(s)) {
-                                    state_lock.add_account(s, state_lock.get_nonce(s) + 1, state_lock.get_value(s) - trans.transaction.Value);
-                                }
-                                else {
-                                    state_lock.add_account(s, 1, -trans.transaction.Value);
-                                }
-                            }
                             bstate = state_lock.clone();
                         }
-                        {
-                            let mut blockchain_lock = self.blockchain.lock().unwrap();
-                            blockchain_lock.insert(&ablock, bstate);
+                        for trans in ablock.get_transactions() {
+                            let r = trans.transaction.Receiver;
+                            let s = trans.transaction.Sender;
+                            
+                            //transaction checks
+                            if !bstate.contains_account(s) || 
+                                !transaction::verify(&trans.transaction, trans.signer_pk.as_ref(), trans.signature.as_ref()) ||
+                                (bstate.get_value(s) - trans.transaction.Value) < 0  {
+            
+                                is_valid = false;
+                                break;
+                            }
+                            else {
+                                let r = trans.transaction.Receiver;
+                                let s = trans.transaction.Sender;
+                                let nonce = bstate.get_nonce(s);
+                                let val = bstate.get_value(s);
+                                bstate.add_account(s, nonce + 1, val - trans.transaction.Value);
+            
+                                // receiver
+                                if bstate.contains_account(r) {
+                                    let nonce = bstate.get_nonce(r);
+                                    let val = bstate.get_value(r);
+                                    bstate.add_account(r, nonce,  val + trans.transaction.Value);
+                                }
+                                else {
+                                    bstate.add_account(r, 0, trans.transaction.Value);
+                                }
+                            }                                
                         }
+
+                        // add block
+                        if is_valid {
+                            print!("the block is valid in network worker\n");
+                            
+                            {
+                                let mut state_lock = self.state.lock().unwrap();
+                                *state_lock = bstate.clone();
+                            }
+
+                            // mempool copy for individual blocks
+                            let mempool_copy;
+                            {
+                                let mut mempool_lock = self.mempool.lock().unwrap();
+                                for t in ablock.get_transaction_hashes() {
+                                    mempool_lock.rm_transaction(t);
+                                }
+                                mempool_copy = mempool_lock.transactions.clone();
+                            }
+
+                            {
+                                print!("im inserting a block in network worker\n");
+                                let mut blockchain_lock = self.blockchain.lock().unwrap();
+                                block_hashes.push(ablock.hash());
+                                blockchain_lock.insert(&ablock, bstate);
+                            }
+
+                            // can't loop through mempool - avoid nested locks, so created copy
+                            let mut thashes: Vec<H256> = Vec::new();
+                            for (key, trans) in mempool_copy {
+                                {
+                                    let state_lock = self.state.lock().unwrap();
+                                    let r = trans.transaction.Receiver;
+                                    let s = trans.transaction.Sender;
+            
+                                    if (!state_lock.contains_account(s) || 
+                                    !transaction::verify(&trans.transaction, trans.signer_pk.as_ref(), trans.signature.as_ref()) ||
+                                    state_lock.get_value(s) < trans.transaction.Value) {
+                                        thashes.push(trans.hash());
+                                    }
+                                }
+                            }
+
+                            {
+                                let mut mempool_lock = self.mempool.lock().unwrap();
+                                for t in thashes {
+                                    mempool_lock.rm_transaction(t);
+                                }
+                            }
+                        } 
                     }
                     
-                    //add blocks wit
-
                     
                     if block_hashes.len() > 0 {
                         self.server.broadcast(Message:: NewBlockHashes(block_hashes));
-
                     }
                 }
                 Message::NewTransactionHashes(transaction_hashes) => {

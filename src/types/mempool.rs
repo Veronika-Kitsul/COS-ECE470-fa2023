@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone)]
 pub struct Mempool {
-    transactions : HashMap<H256, SignedTransaction>,
+    pub transactions : HashMap<H256, SignedTransaction>,
 }
 
 impl Mempool {
@@ -23,8 +23,11 @@ impl Mempool {
     }
 
     // remove transaction from the mempool and return it
-    pub fn rm_transaction(&mut self, hash: H256) -> SignedTransaction{
-        self.transactions.remove(&hash).unwrap()
+    pub fn rm_transaction(&mut self, hash: H256) {
+        if self.transactions.contains_key(&hash) {
+            print!("actually removing the transactions\n");
+            self.transactions.remove(&hash);
+        }
     }
 
     // get a transaction
@@ -37,8 +40,13 @@ impl Mempool {
         self.transactions.insert(transaction.hash(), transaction);
     }
 
-    pub fn get_max(&self, max: u8) -> Vec<SignedTransaction> {
-        let entries = (max as usize).min(self.transactions.len());
+    pub fn get_max(&self, max: usize, min: usize) -> Vec<SignedTransaction> {
+        if min > self.transactions.len() {
+            let empty : Vec<SignedTransaction> = Vec::new();
+            return empty;
+        }
+
+        let entries = (max).min(min);
         let values: Vec<SignedTransaction> = self.transactions.iter().take(entries).map(|(_, value)| value.clone()).collect();
         values
     }    

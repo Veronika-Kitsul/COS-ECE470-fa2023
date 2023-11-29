@@ -5,10 +5,10 @@ use crate::network::server::Handle as NetworkServerHandle;
 use crate::network::message::Message;
 use log::info;
 use std::collections::HashMap;
+use crate::types::state::State;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tiny_http::Header;
-use crate::types::hash::H256;
 use tiny_http::Response;
 use tiny_http::Server as HTTPServer;
 use crate::generator::generator::TransactionGenerator;
@@ -154,6 +154,45 @@ impl Server {
                         "/blockchain/longest-chain-tx-count" => {
                             // unimplemented!()
                             respond_result!(req, false, "unimplemented!");
+                        }
+                        "/blockchain/state" => {
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let block = match params.get("block") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing block number");
+                                    return;
+                                }
+                            };
+                            let block = match block.parse::<usize>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(
+                                        req,
+                                        false,
+                                        format!("error parsing block number: {}", e)
+                                    );
+                                    return;
+                                }
+                            };
+                            
+                            let mut state: State;
+                            {
+                                let blockchain_lock = blockchain.lock().unwrap();
+                                let blocks = blockchain_lock.all_blocks_in_longest_chain();
+                                state = blockchain_lock.get_state(*blocks.get(block).unwrap());
+                            }
+
+                            // Convert to the required format
+                            let account_infos: Vec<String> = state.accounts.iter()
+                            .map(|(address, &(nonce, value))| format!(r#""({}, {}, {})""#, address, nonce, value))
+                            .collect();
+                          
+                            let json = format!("[{}]", account_infos.join(", "));
+                            let content_type = "Content-Type: application/json".parse::<Header>().unwrap();
+                            let resp = Response::from_string(json).with_header(content_type);
+                            req.respond(resp).unwrap();                                  
                         }
                         _ => {
                             let content_type =
