@@ -18,7 +18,7 @@ impl Blockchain {
         //let mut rng = rand::thread_rng();
         //let n = rng.gen_range(0..u32::MAX);
         let n = 5;
-        let d = hex!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
+        let d = hex!("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
         
         let now = SystemTime::now();
         // let time = now.duration_since(UNIX_EPOCH).unwrap().as_millis();

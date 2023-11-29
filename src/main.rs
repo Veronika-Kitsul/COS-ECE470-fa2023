@@ -102,7 +102,7 @@ fn main() {
     miner_worker_ctx.start();
 
     // create tx generator
-    let txgen = TransactionGenerator::new(&mempool, &blockchain, &state, &server);
+    let txgen = TransactionGenerator::new(&mempool, &blockchain, &state, &server, p2p_addr.port());
     // txgen.start();
 
     // connect to known peers

@@ -14,7 +14,7 @@ use crate::types::transaction::verify;
 use crate::types::address::Address;
 use crate::types::mempool::Mempool;
 use crate::blockchain::Blockchain;
-use crate::types::state::State;
+use crate::types::state::{State, create_seed_array}; 
 use crate::network::server::Handle as ServerHandle;
 use crate::network::message::Message;
 use ring::signature::KeyPair;
@@ -26,16 +26,18 @@ pub struct TransactionGenerator {
     blockchain: Arc<Mutex<Blockchain>>,
     state: Arc<Mutex<State>>,
     server: ServerHandle,
+    seed : [u8; 32],
 }
 
 impl TransactionGenerator {
     pub fn new(mp:&Arc<Mutex<Mempool>>, bc: &Arc<Mutex<Blockchain>>, 
-        st: &Arc<Mutex<State>>, server: &ServerHandle) -> Self {
+        st: &Arc<Mutex<State>>, server: &ServerHandle, sd: u16) -> Self {
         Self {
             mempool: Arc::clone(mp),
             blockchain : Arc::clone(bc),
             state: Arc::clone(st),
             server: server.clone(),
+            seed: create_seed_array(sd),
         }
     }
 
@@ -57,20 +59,17 @@ impl TransactionGenerator {
             
             // nonce is always 0 to start with
             let n = 0;
-
-            // sender key pair for signing the transaction
-            let mut rng = rand::thread_rng();
-            let random_seed: [u8; 32] = rng.gen();
-            let key_pair = Ed25519KeyPair::from_seed_unchecked(&random_seed).unwrap();
+            
+            let key_pair = Ed25519KeyPair::from_seed_unchecked(&self.seed).unwrap();
             let public_key_bytes = key_pair.public_key().as_ref();
 
             let mut nonce;
             let mut value;
 
-           
             let mut sender;
             let mut sender_value;
 
+            let mut rng = rand::thread_rng();
             {
                 // generate sender
                 let state_lock = self.state.lock().unwrap();
@@ -98,7 +97,7 @@ impl TransactionGenerator {
             // generate receiver with a probability 80 new, rest - old
             let probability = rng.gen_range(0..100);
             let mut receiver;
-            if (probability < 80) {
+            if (probability < 25) {
                 // generate the address for receiver
                 let random_seed: [u8; 32] = rng.gen();
                 let rec_key_pair = Ed25519KeyPair::from_seed_unchecked(&random_seed).unwrap();
